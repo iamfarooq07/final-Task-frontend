@@ -1,26 +1,26 @@
 import React from "react";
 import Signup from "./Auth/Signup.jsx";
 import Login from "./Auth/Login.jsx";
+import Dashboard from "./component/Dashboard.jsx";
+import PublicProfile from "./pages/PublicProfile.jsx";
 import { Route, Routes } from "react-router-dom";
-import Dashborad from "./component/Dashborad.jsx";
 
 function App() {
   return (
-    <div>
-      <Routes>
-        <Route index element={<Signup />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/dashboard" element={<Dashborad />} />
-        <Route
-          path="*"
-          element={
-            <h1 className="text-2xl text-center py-4 font-extrabold">
-              Page Not Found
-            </h1>
-          }
-        />
-      </Routes>
-    </div>
+    <Routes>
+      <Route index element={<Signup />} />
+      <Route path="/login" element={<Login />} />
+      <Route path="/dashboard" element={<Dashboard />} />
+      <Route path="/u/:username" element={<PublicProfile />} />
+      <Route
+        path="*"
+        element={
+          <div className="min-h-screen bg-[#050505] flex items-center justify-center">
+            <p className="text-white text-2xl font-bold">404 — Page Not Found</p>
+          </div>
+        }
+      />
+    </Routes>
   );
 }
 
