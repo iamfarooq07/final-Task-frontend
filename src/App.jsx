@@ -3,12 +3,14 @@ import Signup from "./Auth/Signup.jsx";
 import Login from "./Auth/Login.jsx";
 import Dashboard from "./component/Dashboard.jsx";
 import PublicProfile from "./pages/PublicProfile.jsx";
+import LandingPage from "./pages/LandingPage.jsx";
 import { Route, Routes } from "react-router-dom";
 
 function App() {
   return (
     <Routes>
-      <Route index element={<Signup />} />
+      <Route index element={<LandingPage />} />
+      <Route path="/signup" element={<Signup />} />
       <Route path="/login" element={<Login />} />
       <Route path="/dashboard" element={<Dashboard />} />
       <Route path="/u/:username" element={<PublicProfile />} />

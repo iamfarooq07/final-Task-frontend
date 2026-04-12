@@ -112,7 +112,7 @@ function Login() {
         <div className="mt-10 text-center">
           <p className="text-zinc-500 text-sm">
             Don't have an account?{" "}
-            <Link to="/" className="text-white font-semibold hover:underline">
+            <Link to="/signup" className="text-white font-semibold hover:underline">
               Sign Up
             </Link>
           </p>

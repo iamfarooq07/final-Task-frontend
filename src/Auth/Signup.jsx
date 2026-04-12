@@ -58,6 +58,24 @@ function Signup() {
 
       {/* Glass Card Container */}
       <div className="w-full max-w-md p-10 bg-white/[0.03] backdrop-blur-2xl rounded-[2.5rem] border border-white/10 shadow-2xl z-10 mx-4">
+        <Link
+          to={"/"}
+          className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors duration-200"
+        >
+          {/* Left Arrow Icon */}
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            fill="none"
+            viewBox="0 0 24 24"
+            strokeWidth={2}
+            stroke="currentColor"
+            className="w-5 h-5"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5L3 12m0 0l7.5-7.5M3 12h18" />
+          </svg>
+
+          <span className="text-sm font-medium">Back</span>
+        </Link>
         <div className="text-center mb-10">
           <h1 className="text-4xl font-bold text-white tracking-tight mb-2">
             Create Account
