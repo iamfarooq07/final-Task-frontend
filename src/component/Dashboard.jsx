@@ -5,28 +5,49 @@ import {
   FiPlus, FiTrash2, FiExternalLink, FiLink, FiActivity,
   FiMousePointer, FiLogOut, FiUser, FiEye,
 } from "react-icons/fi";
-import { getLinks, createLink, updateLink, deleteLink, getProfile, updateProfile } from "../services/api";
+import { getLinks, createLink, updateLink, deleteLink, getProfile, updateProfile, createProfile } from "../services/api";
 import MobilePreview from "./MobilePreview";
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [links, setLinks] = useState([]);
-  const [profile, setProfile] = useState({ fullName: "", bio: "", profileImage: "" });
+  const [profile, setProfile] = useState({ fullName: "", bio: "", profileImage: "", username: "" });
+  const [profileExists, setProfileExists] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
     try {
-      const [linksRes, profileRes] = await Promise.all([getLinks(), getProfile()]);
-      setLinks(linksRes.data?.links || linksRes.data || []);
-      const p = profileRes.data?.profile || profileRes.data || {};
-      setProfile({ fullName: p.fullName || "", bio: p.bio || "", profileImage: p.profileImage || "" });
-    } catch {
-      // use mock data for demo
-      setLinks([
-        { _id: "1", title: "My Portfolio", url: "https://example.com", isActive: true, clicks: 42 },
-        { _id: "2", title: "GitHub", url: "https://github.com", isActive: true, clicks: 18 },
-      ]);
-      setProfile({ fullName: "John Doe", bio: "Developer & Creator", profileImage: "" });
+      // Fetch profile first; if 404, profile hasn't been created yet
+      let p = {};
+      try {
+        const profileRes = await getProfile();
+        p = profileRes.data?.profile || profileRes.data || {};
+        setProfileExists(true);
+      } catch (err) {
+        if (err.response?.status !== 404) throw err;
+        // Profile doesn't exist yet — that's fine, user will create on first save
+        setProfileExists(false);
+      }
+
+      setProfile({
+        fullName: p.fullName || "",
+        bio: p.bio || "",
+        profileImage: p.profileImage || "",
+        username: p.username || "",
+      });
+
+      // Only fetch links if profile exists
+      if (p._id) {
+        try {
+          const linksRes = await getLinks();
+          setLinks(linksRes.data?.links || linksRes.data || []);
+        } catch {
+          setLinks([]);
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load dashboard data:", err.response?.data || err.message);
+      toast.error("Failed to load data. Please refresh.");
     } finally {
       setLoading(false);
     }
@@ -34,14 +55,10 @@ export default function Dashboard() {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const handleAddLink = async () => {
-    const newLink = { title: "", url: "", isActive: true, clicks: 0 };
-    try {
-      const res = await createLink(newLink);
-      setLinks((prev) => [...prev, res.data?.link || res.data]);
-    } catch {
-      setLinks((prev) => [...prev, { ...newLink, _id: Date.now().toString() }]);
-    }
+  const handleAddLink = () => {
+    // Create a local-only link with a temp ID; it gets persisted on blur once title+url are filled
+    const tempId = `temp_${Date.now()}`;
+    setLinks((prev) => [...prev, { _id: tempId, title: "", url: "", isActive: true, clicks: 0 }]);
   };
 
   const handleLinkChange = (id, field, value) => {
@@ -49,26 +66,70 @@ export default function Dashboard() {
   };
 
   const handleLinkBlur = async (link) => {
-    try { await updateLink(link._id, link); } catch { /* silent */ }
+    const isTemp = link._id?.startsWith("temp_");
+    if (!link.title || !link.url) return; // don't persist incomplete links
+
+    try {
+      if (isTemp) {
+        // First time saving — create it on the server
+        const res = await createLink({ title: link.title, url: link.url, isActive: link.isActive });
+        const saved = res.data?.link || res.data;
+        // Replace the temp entry with the real one from the server
+        setLinks((prev) => prev.map((l) => (l._id === link._id ? saved : l)));
+      } else {
+        await updateLink(link._id, link);
+      }
+    } catch { /* silent */ }
   };
 
   const handleToggle = async (link) => {
     const updated = { ...link, isActive: !link.isActive };
     setLinks((prev) => prev.map((l) => (l._id === link._id ? updated : l)));
+    if (link._id?.startsWith("temp_")) return; // not persisted yet
     try { await updateLink(link._id, updated); } catch { /* silent */ }
   };
 
   const handleDelete = async (id) => {
     setLinks((prev) => prev.filter((l) => l._id !== id));
+    if (id?.startsWith("temp_")) return; // nothing to delete on server
     try { await deleteLink(id); } catch { /* silent */ }
   };
 
   const handleProfileSave = async () => {
     try {
-      await updateProfile(profile);
-      toast.success("Profile updated");
-    } catch {
-      toast.error("Failed to update profile");
+      const payload = {
+        fullName: profile.fullName,
+        bio: profile.bio,
+        profileImage: profile.profileImage,
+      };
+
+      let res;
+      if (!profileExists) {
+        // First time — need a username to create the profile
+        if (!profile.username) {
+          toast.error("Please enter a username to create your profile");
+          return;
+        }
+        res = await createProfile({ ...payload, username: profile.username });
+        setProfileExists(true);
+      } else {
+        res = await updateProfile(payload);
+      }
+
+      const updated = res.data?.profile || res.data;
+      setProfile((prev) => ({
+        ...prev,
+        fullName: updated.fullName || prev.fullName,
+        bio: updated.bio ?? prev.bio,
+        profileImage: updated.profileImage ?? prev.profileImage,
+        username: updated.username || prev.username,
+      }));
+      toast.success("Profile saved successfully");
+      // Reload links now that profile exists
+      if (!profileExists) fetchData();
+    } catch (err) {
+      console.error("Save profile error:", err.response?.data || err.message);
+      toast.error(err.response?.data?.message || "Failed to save profile");
     }
   };
 
@@ -106,7 +167,13 @@ export default function Dashboard() {
         </div>
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate(`/u/${profile.username || "preview"}`)}
+            onClick={() => {
+              if (!profile.username) {
+                toast.error("Save your profile first to get a public URL");
+                return;
+              }
+              navigate(`/u/${profile.username}`);
+            }}
             className="flex items-center gap-2 text-zinc-400 hover:text-white text-sm transition-colors px-3 py-1.5 rounded-xl hover:bg-white/5"
           >
             <FiEye size={15} /> View Profile
@@ -170,6 +237,18 @@ export default function Dashboard() {
               <h2 className="text-white font-bold text-lg">Profile Settings</h2>
             </div>
             <div className="space-y-4">
+              {!profileExists && (
+                <div>
+                  <label className="text-xs font-medium text-zinc-400 uppercase tracking-widest block mb-1.5">Username <span className="text-red-400">*</span></label>
+                  <input
+                    value={profile.username}
+                    onChange={(e) => setProfile((p) => ({ ...p, username: e.target.value.toLowerCase().replace(/\s+/g, "") }))}
+                    placeholder="your-unique-username"
+                    className="w-full px-4 py-3 bg-white/[0.04] border border-white/10 rounded-xl text-white placeholder:text-zinc-600 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 transition-all"
+                  />
+                  <p className="text-xs text-zinc-500 mt-1">Required to create your profile. Cannot be changed later.</p>
+                </div>
+              )}
               <div>
                 <label className="text-xs font-medium text-zinc-400 uppercase tracking-widest block mb-1.5">Full Name</label>
                 <input
